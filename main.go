@@ -81,11 +81,21 @@ func pollEvent(screen tcell.Screen, state *State) {
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			screen.Fini()
 			os.Exit(0)
+		default:
+			relativeCursorPos := state.currentCursorPos - cursorInitialPos
+			head := state.query[:relativeCursorPos]
+			tail := state.query[relativeCursorPos:]
+
+			state.query = head + string(ev.Rune()) + tail
+			state.currentCursorPos++
+			state.condition.inputRow = true
 		}
+
 	}
 }
 
 func refreshInputRow(screen tcell.Screen, state State) {
+	setContents(screen, cursorInitialPos, 0, state.query, tcell.StyleDefault)
 	screen.ShowCursor(state.currentCursorPos, 0)
 }
 
@@ -123,7 +133,7 @@ func initScreen(screen tcell.Screen, state State) {
 
 func main() {
 	state := State{
-		query:            "dummy query",
+		query:            "",
 		currentCursorPos: cursorInitialPos,
 		currentRowNum:    0,
 		inputRows:        []string{},
