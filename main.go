@@ -62,6 +62,12 @@ func pollEvent(screen tcell.Screen, state *State) {
 			os.Exit(0)
 		case tcell.KeyCtrlP:
 		case tcell.KeyCtrlN:
+		case tcell.KeyCtrlA:
+			state.currentCursorPos = cursorInitialPos
+			state.condition.inputRow = true
+		case tcell.KeyCtrlE:
+			state.currentCursorPos = cursorInitialPos + len(state.query)
+			state.condition.inputRow = true
 		case tcell.KeyCtrlB:
 			if state.currentCursorPos != cursorInitialPos {
 				state.currentCursorPos--
