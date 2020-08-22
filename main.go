@@ -1,11 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/gdamore/tcell"
 	"github.com/mattn/go-runewidth"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 type SelectedRow struct {
@@ -14,18 +18,12 @@ type SelectedRow struct {
 	lastIdx  int
 }
 
-type updateCondition struct {
-	inputRow bool
-	rows     bool
-}
-
 type State struct {
 	query            string
 	currentCursorPos int
 	currentRowNum    int
 	inputRows        []string
 	selectedRows     []SelectedRow
-	condition        updateCondition
 }
 
 const (
@@ -64,20 +62,16 @@ func pollEvent(screen tcell.Screen, state *State) {
 		case tcell.KeyCtrlN:
 		case tcell.KeyCtrlA:
 			state.currentCursorPos = cursorInitialPos
-			state.condition.inputRow = true
 		case tcell.KeyCtrlE:
 			state.currentCursorPos = cursorInitialPos + len(state.query)
-			state.condition.inputRow = true
 		case tcell.KeyCtrlB:
 			if state.currentCursorPos != cursorInitialPos {
 				state.currentCursorPos--
 			}
-			state.condition.inputRow = true
 		case tcell.KeyCtrlF:
 			if state.currentCursorPos < cursorInitialPos+len(state.query) {
 				state.currentCursorPos++
 			}
-			state.condition.inputRow = true
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			screen.Fini()
 			os.Exit(0)
@@ -88,13 +82,13 @@ func pollEvent(screen tcell.Screen, state *State) {
 
 			state.query = head + string(ev.Rune()) + tail
 			state.currentCursorPos++
-			state.condition.inputRow = true
 		}
 
 	}
 }
 
-func refreshInputRow(screen tcell.Screen, state State) {
+func refreshQuery(screen tcell.Screen, state State) {
+	setContents(screen, promptPos, 0, ">", tcell.StyleDefault)
 	setContents(screen, cursorInitialPos, 0, state.query, tcell.StyleDefault)
 	screen.ShowCursor(state.currentCursorPos, 0)
 }
@@ -106,15 +100,13 @@ func refreshRows(screen tcell.Screen, state State) {
 }
 
 func refreshScreen(screen tcell.Screen, state *State) {
-	if state.condition.inputRow {
-		refreshInputRow(screen, *state)
-		state.condition.inputRow = false
-	}
-	if state.condition.rows {
-		state.updateRows()
-		refreshRows(screen, *state)
-		state.condition.rows = false
-	}
+	screen.Clear()
+
+	refreshQuery(screen, *state)
+
+	state.updateRows()
+	refreshRows(screen, *state)
+
 	screen.Show()
 }
 
@@ -122,13 +114,23 @@ func initScreen(screen tcell.Screen, state State) {
 	if err := screen.Init(); err != nil {
 		log.Fatal(err)
 	}
-	setContents(screen, promptPos, 0, ">", tcell.StyleDefault)
-	setContents(screen, cursorInitialPos, 0, state.query, tcell.StyleDefault)
-	screen.ShowCursor(cursorInitialPos, 0)
-
+	refreshQuery(screen, state)
 	refreshRows(screen, state)
 
 	screen.Show()
+}
+
+func initSelectedRows(initalRows []string) []SelectedRow {
+	selectedRows := []SelectedRow{}
+	for _, str := range initalRows {
+		row := SelectedRow{
+			text:     str,
+			firstIdx: -1,
+			lastIdx:  -1,
+		}
+		selectedRows = append(selectedRows, row)
+	}
+	return selectedRows
 }
 
 func main() {
@@ -138,6 +140,33 @@ func main() {
 		currentRowNum:    0,
 		inputRows:        []string{},
 		selectedRows:     []SelectedRow{},
+	}
+
+	if terminal.IsTerminal(0) {
+		// pipe
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "only one argument(file path) is required")
+			os.Exit(1)
+		}
+
+		input, err := ioutil.ReadFile(os.Args[1])
+		if err != nil {
+			log.Fatal(err)
+		}
+		initialRows := strings.Split(string(input), "\n")
+		state.inputRows = initialRows
+		state.selectedRows = initSelectedRows(initialRows)
+
+	} else {
+		// file
+		if len(os.Args) > 1 {
+			fmt.Fprintln(os.Stderr, "use pipe without any arguments")
+			os.Exit(1)
+		}
+		input, _ := ioutil.ReadAll(os.Stdin)
+		initialRows := strings.Split(string(input), "\n")
+		state.inputRows = initialRows
+		state.selectedRows = initSelectedRows(initialRows)
 	}
 
 	screen, err := tcell.NewScreen()
