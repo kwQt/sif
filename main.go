@@ -24,6 +24,8 @@ type State struct {
 	currentRowNum    int
 	inputRows        []string
 	selectedRows     []SelectedRow
+	width, height    int
+	offset           int
 }
 
 const (
@@ -31,8 +33,15 @@ const (
 	cursorInitialPos = 2
 )
 
+func min(x int, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 func (state *State) updateRows() {
-	updatedRows := []SelectedRow{}
+	updatedRows := make([]SelectedRow, 0)
 	for _, str := range state.inputRows {
 		row := filter(str, state.query)
 		if row == nil {
@@ -41,6 +50,10 @@ func (state *State) updateRows() {
 		updatedRows = append(updatedRows, *row)
 	}
 	state.selectedRows = updatedRows
+	state.currentRowNum = min(state.currentRowNum, len(state.selectedRows)-1)
+	if state.currentRowNum < 0 {
+		state.currentRowNum = 0
+	}
 }
 
 func setContents(screen tcell.Screen, x int, y int, str string, style tcell.Style) {
@@ -63,7 +76,13 @@ func pollEvent(screen tcell.Screen, state *State) {
 			screen.Fini()
 			os.Exit(0)
 		case tcell.KeyCtrlP:
+			if state.currentRowNum > 0 {
+				state.currentRowNum--
+			}
 		case tcell.KeyCtrlN:
+			if state.currentRowNum < len(state.selectedRows)-1 {
+				state.currentRowNum++
+			}
 		case tcell.KeyCtrlA:
 			state.currentCursorPos = cursorInitialPos
 		case tcell.KeyCtrlE:
@@ -109,12 +128,32 @@ func refreshQuery(screen tcell.Screen, state State) {
 }
 
 func refreshRows(screen tcell.Screen, state State) {
+	state.offset = state.currentRowNum - (state.height - 2)
+	if state.offset < 0 {
+		state.offset = 0
+	}
+
 	for idx, row := range state.selectedRows {
-		setContents(screen, 0, idx+1, row.text, tcell.StyleDefault)
+		if idx < state.offset {
+			continue
+		}
+		if idx > state.offset+state.height-1 {
+			break
+		}
+
+		var style tcell.Style
+		if idx == state.currentRowNum {
+			style = style.Foreground(tcell.ColorPaleVioletRed)
+		} else {
+			style = tcell.StyleDefault
+		}
+		setContents(screen, 0, idx-state.offset+1, "- "+row.text, style)
 	}
 }
 
 func refreshScreen(screen tcell.Screen, state *State) {
+	state.width, state.height = screen.Size()
+
 	screen.Clear()
 
 	refreshQuery(screen, *state)
@@ -153,10 +192,9 @@ func main() {
 		query:            "",
 		currentCursorPos: cursorInitialPos,
 		currentRowNum:    0,
-		inputRows:        []string{},
-		selectedRows:     []SelectedRow{},
 	}
 
+	var initialRows []string
 	if terminal.IsTerminal(0) {
 		// pipe
 		if len(os.Args) != 2 {
@@ -168,21 +206,21 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		initialRows := strings.Split(string(input), "\n")
-		state.inputRows = initialRows
-		state.selectedRows = initSelectedRows(initialRows)
-
+		initialRows = strings.Split(string(input), "\n")
 	} else {
 		// file
 		if len(os.Args) > 1 {
 			fmt.Fprintln(os.Stderr, "use pipe without any arguments")
 			os.Exit(1)
 		}
-		input, _ := ioutil.ReadAll(os.Stdin)
-		initialRows := strings.Split(string(input), "\n")
-		state.inputRows = initialRows
-		state.selectedRows = initSelectedRows(initialRows)
+		input, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			log.Fatal(err)
+		}
+		initialRows = strings.Split(string(input), "\n")
 	}
+	state.inputRows = initialRows[:len(initialRows)-1]
+	state.selectedRows = initSelectedRows(state.inputRows)
 
 	screen, err := tcell.NewScreen()
 	if err != nil {
