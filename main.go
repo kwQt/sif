@@ -50,6 +50,10 @@ func setContents(screen tcell.Screen, x int, y int, str string, style tcell.Styl
 	}
 }
 
+func removeCharByIndex(str string, index int) string {
+	return str[:index] + str[index+1:]
+}
+
 func pollEvent(screen tcell.Screen, state *State) {
 	ev := screen.PollEvent()
 	switch ev := ev.(type) {
@@ -75,17 +79,13 @@ func pollEvent(screen tcell.Screen, state *State) {
 		case tcell.KeyBackspace, tcell.KeyBackspace2:
 			relativePos := state.currentCursorPos - cursorInitialPos
 			if relativePos > 0 {
-				head := state.query[:relativePos-1]
-				tail := state.query[relativePos:]
-				state.query = head + tail
+				state.query = removeCharByIndex(state.query, relativePos-1)
 				state.currentCursorPos--
 			}
 		case tcell.KeyDelete, tcell.KeyCtrlD:
 			relativePos := state.currentCursorPos - cursorInitialPos
 			if relativePos < len(state.query) {
-				head := state.query[:relativePos]
-				tail := state.query[relativePos+1:]
-				state.query = head + tail
+				state.query = removeCharByIndex(state.query, relativePos)
 			}
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			screen.Fini()
