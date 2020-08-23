@@ -72,6 +72,14 @@ func pollEvent(screen tcell.Screen, state *State) {
 			if state.currentCursorPos < cursorInitialPos+len(state.query) {
 				state.currentCursorPos++
 			}
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			relativePos := state.currentCursorPos - cursorInitialPos
+			if relativePos > 0 {
+				head := state.query[:relativePos-1]
+				tail := state.query[relativePos:]
+				state.query = head + tail
+				state.currentCursorPos--
+			}
 		case tcell.KeyEscape, tcell.KeyCtrlC:
 			screen.Fini()
 			os.Exit(0)
