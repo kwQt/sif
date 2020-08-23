@@ -12,7 +12,7 @@ func filter(target string, query string) *SelectedRow {
 	row := &SelectedRow{
 		text:     target,
 		firstIdx: idx,
-		lastIdx:  idx + len(target) - 1,
+		lastIdx:  idx + len(query) - 1,
 	}
 	return row
 }
