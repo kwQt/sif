@@ -74,6 +74,7 @@ func pollEvent(screen tcell.Screen, state *State) {
 		switch ev.Key() {
 		case tcell.KeyEnter:
 			screen.Fini()
+			fmt.Fprintln(os.Stdout, state.selectedRows[state.currentRowNum].text)
 			os.Exit(0)
 		case tcell.KeyCtrlP:
 			if state.currentRowNum > 0 {
@@ -141,13 +142,23 @@ func refreshRows(screen tcell.Screen, state State) {
 			break
 		}
 
-		var style tcell.Style
+		coloredStyle := tcell.StyleDefault.Foreground(tcell.ColorPaleVioletRed)
+		y := idx - state.offset + 1
+
 		if idx == state.currentRowNum {
-			style = style.Foreground(tcell.ColorPaleVioletRed)
+			setContents(screen, 0, y, "- "+row.text, coloredStyle)
+
 		} else {
-			style = tcell.StyleDefault
+			setContents(screen, 0, y, "- ", tcell.StyleDefault)
+
+			for i, char := range row.text {
+				if row.firstIdx <= i && i <= row.lastIdx {
+					setContents(screen, len("- ")+i, y, string(char), coloredStyle)
+				} else {
+					setContents(screen, len("- ")+i, y, string(char), tcell.StyleDefault)
+				}
+			}
 		}
-		setContents(screen, 0, idx-state.offset+1, "- "+row.text, style)
 	}
 }
 
